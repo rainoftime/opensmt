@@ -11,21 +11,18 @@ const int CUFTheory::i_default_bitwidth = 32;
 //
 bool CUFTheory::simplify(const vec<PFRef>& formulas, int curr)
 {
-
+    auto & currentFrame = pfstore[formulas[curr]];
     if (this->keepPartitions()) {
-        pfstore[formulas[curr]].root = getLogic().mkAnd(pfstore[formulas[curr]].formulas);
-        return true;
+        currentFrame.root = getLogic().mkAnd(currentFrame.formulas);
     }
     else {
         PTRef coll_f = getCollateFunction(formulas, curr);
-
         PTRef trans = getLogic().learnEqTransitivity(coll_f);
-        pfstore[formulas[curr]].push(trans);
-
-        bool res = computeSubstitutions(coll_f, formulas, curr);
-        PTRef substs_formula = getSubstitutionsFormulaFromUnits(pfstore[formulas[curr]].units);
-        pfstore[formulas[curr]].substs = substs_formula;
-        return res;
+        coll_f = getLogic().mkAnd(coll_f, trans);
+        auto subs_res = computeSubstitutions(coll_f);
+        currentFrame.root = flaFromSubstitutionResult(subs_res);
+        getTSolverHandler().setSubstitutions(subs_res.usedSubstitution);
     }
+    return true;
 }
 

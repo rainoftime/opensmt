@@ -347,8 +347,9 @@ public:
     void        pushBacktrackPoint ( );
     void        popBacktrackPoint  ( );
     void        reset              ( );
-    inline void restoreOK          ( )       { ok = true; }
+    inline void restoreOK          ( )       { ok = true; conflict_frame = 0; }
     inline bool isOK               ( ) const { return ok; } // FALSE means solver is in a conflicting state
+    inline int  getConflictFrame   ( ) const { assert(not isOK()); return conflict_frame; }
 
     template<class C>
     void     printSMTClause   ( ostream &, const C& );
@@ -480,7 +481,8 @@ protected:
     // Solver state:
     //
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
-    uint32_t n_clauses;             // number of clauses in the problem
+    int                 conflict_frame;   // Contains the frame (the assumption literal index+1) where conflict was detected.  (Default is 0)
+    uint32_t            n_clauses;        // number of clauses in the problem
     vec<CRef>           clauses;          // List of problem clauses.
     vec<CRef>           learnts;          // List of learnt clauses.
     vec<CRef>           tmp_reas;         // Reasons for minimize_conflicts 2
@@ -511,6 +513,7 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
+    Map<Var,int, VarHash> assumptions_order; // Defined for active assumption variables: how manyeth active assumption variable this is in assumptions
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              random_seed;      // Used by the random variable selection.
     double              progress_estimate;// Set by 'search()'.

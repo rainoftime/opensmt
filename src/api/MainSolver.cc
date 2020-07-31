@@ -109,9 +109,7 @@ MainSolver::insertFormula(PTRef root, char** msg)
 
     PushFrame& lastFrame =  pfstore[frames.last()];
     lastFrame.push(root);
-    lastFrame.units.clear();
     lastFrame.root = PTRef_Undef;
-    lastFrame.substs = logic.getTerm_true();
     // New formula has been added to the last frame. If the frame has been simplified before, we need to do it again
     frames.setSimplifiedUntil(std::min(frames.getSimplifiedUntil(), frames.size() - 1));
     return s_Undef;
@@ -134,7 +132,6 @@ sstat MainSolver::simplifyFormulas(char** err_msg)
         const PushFrame & frame = pfstore[frames.getFrameReference(i)];
 
         if (keepPartitionsSeparate) {
-            assert(frame.substs == logic.getTerm_true());
             vec<PTRef> const & flas = frame.formulas;
             for (int j = 0; j < flas.size() && status != s_False; ++j) {
                 PTRef fla = flas[j];
@@ -161,8 +158,6 @@ sstat MainSolver::simplifyFormulas(char** err_msg)
             if (logic.isBooleanOperator(root)) {
                 root = rewriteMaxArity(root);
             }
-            // root_instance is updated to the and of the simplified formulas currently in the solver, together with the substitutions
-            root = logic.mkAnd(root, frame.substs);
             root_instance.setRoot(root);
             status = giveToSolver(root, frame.getId());
         }
@@ -242,7 +237,11 @@ ValPair MainSolver::getValue(PTRef tr) const
         // Try if it was not substituted away
         PTRef subs = thandler.getSubstitution(tr);
         if (subs != PTRef_Undef) {
-            return getValue(subs);
+            auto res = getValue(subs);
+            // MB: getValue returns pair where first element is the queried PTRef;
+            //     In case of substitutions, we need to replace it with the original query
+            res.tr = tr;
+            return res;
         }
         // Term not seen in the formula, any value can be returned since it cannot have any effect on satisfiability
         return ValPair(tr, Logic::tk_true);
@@ -393,7 +392,8 @@ sstat MainSolver::check()
     if (rval == s_Undef) {
         rval = solve();
         if (rval == s_False) {
-            rememberLastFrameUnsat();
+            assert(not smt_solver->isOK());
+            rememberUnsatFrame(smt_solver->getConflictFrame());
         }
     }
 

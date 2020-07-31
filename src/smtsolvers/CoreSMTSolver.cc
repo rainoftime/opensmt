@@ -98,7 +98,8 @@ CoreSMTSolver::CoreSMTSolver(SMTConfig & c, THandler& t )
     , forced_split          (lit_Undef)
 
     , ok                    (true)
-    , n_clauses(0)
+    , conflict_frame        (0)
+    , n_clauses             (0)
     , cla_inc               (1)
     , var_inc               (1)
     , watches               (WatcherDeleted(ca))
@@ -1072,14 +1073,15 @@ void CoreSMTSolver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
         {
             if (reason(x) == CRef_Undef)
             {
-                out_conflict.push(~trail[i]);
-                if (logsProofForInterpolation()) {
-                    assert(level(x) > 0);
-                    assert(std::find(&assumptions[0], &assumptions[0] + assumptions.size(), trail[i])
-                           != &assumptions[0] + assumptions.size());
-                    // Add a resolution step with unit clauses for this assumption
-                    CRef assumptionUnitClause = proof->getUnitForAssumptionLiteral(trail[i]);
-                    proof->addResolutionStep(assumptionUnitClause, x);
+                if (assumptions_order.has(x)) {
+                    out_conflict.push(~trail[i]);
+                    if (logsProofForInterpolation()) {
+                        assert(level(x) > 0);
+                        assert(std::find(assumptions.begin(), assumptions.end(), trail[i]) != assumptions.end());
+                        // Add a resolution step with unit clauses for this assumption
+                        CRef assumptionUnitClause = proof->getUnitForAssumptionLiteral(trail[i]);
+                        proof->addResolutionStep(assumptionUnitClause, x);
+                    }
                 }
             }
             else
@@ -1114,7 +1116,7 @@ void CoreSMTSolver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
     }
     assert(seen[var(p)] == 0);
     seen[var(p)] = 0;
-     if (logsProofForInterpolation()) {
+    if (logsProofForInterpolation()) {
         // MB: Hopefully we have resolved away all literals including assumptions
         proof->endChain(CRef_Undef);
     }
@@ -1547,7 +1549,9 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
     // (Incomplete) Check of Level-0 atoms
 
     TPropRes res = checkTheory(false, conflictC);
-    if ( res == TPropRes::Unsat) return l_False;
+    if ( res == TPropRes::Unsat) {
+        return zeroLevelConflictHandler();
+    }
 
     assert( res == TPropRes::Decide || res == TPropRes::Propagate ); // Either good for decision (from TSolver's perspective) or propagate
 #ifdef STATISTICS
@@ -1649,11 +1653,7 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
 
                 TPropRes res = checkTheory(false, conflictC);
                 if (res == TPropRes::Unsat) {
-                    if (splits.size() > 0) {
-                        opensmt::stop = true;
-                        return l_Undef;
-                    }
-                    else return l_False;    // Top-Level conflict: unsat
+                    return zeroLevelConflictHandler();
                 }
                 else if (res == TPropRes::Propagate) {
                     continue; // Theory conflict: time for bcp
@@ -1688,6 +1688,13 @@ lbool CoreSMTSolver::search(int nof_conflicts, int nof_learnts)
                 else if (value(p) == l_False)
                 {
                     analyzeFinal(~p, conflict);
+                    int max = 0;
+                    for (Lit q : conflict) {
+                        if (!sign(q)) {
+                            max = assumptions_order[var(q)] > max ? assumptions_order[var(q)] : max;
+                        }
+                    }
+                    conflict_frame = max+1;
                     return zeroLevelConflictHandler();
                 }
                 else
@@ -2088,7 +2095,14 @@ void CoreSMTSolver::garbageCollect()
 
 void CoreSMTSolver::setAssumptions(vec<Lit> const & assumps) {
     assumptions.clear();
+    assumptions_order.clear();
     assumps.copyTo(assumptions);
+    int active_assumptions = 0;
+    for (int i = 0; i < assumptions.size(); i++) {
+        if (sign(assumptions[i])) {
+            assumptions_order.insert(var(assumps[i]), active_assumptions++);
+        }
+    }
     if(proof) {
         proof->setCurrentAssumptionLiterals(&assumps[0], &assumps[0] + assumps.size());
     }
