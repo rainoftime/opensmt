@@ -68,9 +68,9 @@ int main( int argc, char * argv[] )
     cerr << "; pedantic assertion checking enabled (very slow)" << endl;
 #endif
 
-#ifndef NDEBUG
-    cerr << "; this binary is compiled in debug mode (slow)" << endl;
-#endif
+//#ifndef NDEBUG
+    //cerr << "; this binary is compiled in debug mode (slow)" << endl;
+//#endif
 
   // Accepts file from stdin if nothing specified
     FILE * fin = NULL;
