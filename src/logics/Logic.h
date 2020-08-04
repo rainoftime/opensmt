@@ -29,15 +29,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "SymStore.h"
 #include "PtStore.h"
 #include "SStore.h"
-#include "Tterm.h"
 #include "PartitionInfo.h"
 #include "CgTypes.h"
+#include "LogicFactory.h"
 
 
 
 class SStore;
-struct SMTConfig;
-
 
 class Logic {
     class TFun {
@@ -56,12 +54,6 @@ class Logic {
         }
         TFun() : ret_sort(SRef_Undef), tr_body(PTRef_Undef), name(NULL) {}
         TFun(TFun& other) : ret_sort(other.ret_sort), tr_body(other.tr_body), name(other.name) { other.args.copyTo(args); }
-        TFun(const Tterm& t, SRef rsort) : ret_sort(rsort), tr_body(t.getBody())
-        {
-            name = (char*)malloc(strlen(t.getName())+1);
-            strcpy(name, t.getName());
-            t.getArgs().copyTo(args);
-        }
         ~TFun() { free(name); }
         TFun& operator=(TFun& other) {
             if (&other != this) {
@@ -101,8 +93,36 @@ class Logic {
 
     int distinctClassCount;
 
-    Map<const char*,TFun,StringHash,Equal<const char*> > defined_functions;
-    vec<Tterm> defined_functions_vec; // A strange interface through the Tterms..
+    class DefinedFunctions {
+        Map<const char*,TFun,StringHash,Equal<const char*> > defined_functions;
+        vec<char*> defined_functions_names;
+
+    public:
+        bool has(const char* name) const { return defined_functions.has(name); }
+
+        void insert(const char* name, TFun const & templ) {
+            assert(not has(name));
+            defined_functions_names.push();
+            defined_functions_names.last() = strdup(name);
+            defined_functions.insert(defined_functions_names.last(), templ);
+        }
+
+        TFun & operator[](const char* name) {
+            assert(has(name));
+            return defined_functions[name];
+        }
+
+        void getKeys(vec<const char*> & keys_out) {
+            defined_functions.getKeys(keys_out);
+        }
+
+        ~DefinedFunctions() {
+            for (char* name : defined_functions_names) {
+                free(name);
+            }
+        }
+    };
+    DefinedFunctions defined_functions;
 
     vec<bool>           constants;
     vec<bool>           interpreted_functions;
@@ -115,12 +135,10 @@ class Logic {
     } Ite;
     Map<PTRef,Ite,PTRefHash,Equal<PTRef>>    top_level_ites;
 
-    SMTConfig&          config;
     IdentifierStore     id_store;
     SStore              sort_store;
     SymStore            sym_store;
     PtStore             term_store;
-    opensmt::Logic_t    logic_type;
     SymRef              sym_TRUE;
     SymRef              sym_FALSE;
     SymRef              sym_ANON;
@@ -183,7 +201,7 @@ class Logic {
     static const char*  s_ite_prefix;
     static const char*  s_framev_prefix;
 
-    Logic(SMTConfig& c);
+    Logic();
     virtual ~Logic();
 
     bool isIteVar(PTRef tr) const;// { return top_level_ites.has(tr); }
@@ -192,8 +210,8 @@ class Logic {
 
     virtual void conjoinExtras(PTRef root, PTRef& new_root);// { conjoinItes(root, new_root); }
 
-    virtual const opensmt::Logic_t getLogic() const;
-    virtual const char * getName() const;
+    virtual const char * getName() const { return "QF_UF"; }
+    virtual const opensmt::Logic_t getLogic() const { return opensmt::Logic_t::QF_UF; }
 
     // Identifiers
     IdRef       newIdentifier (const char* name)   ;//         { return id_store.newIdentifier(name); }
@@ -266,7 +284,6 @@ class Logic {
 
     SymRef      declareFun    (const char* fname, const SRef rsort, const vec<SRef>& args, char** msg, bool interpreted = false);
     bool        defineFun     (const char* fname, const vec<PTRef>& args, SRef ret_sort, const PTRef tr);
-    vec<Tterm>& getFunctions  ();
     SRef        declareSort   (const char* id, char** msg);
 
     PTRef       mkBoolVar     (const char* name);
@@ -279,19 +296,12 @@ class Logic {
     void dumpFunction(ostream& dump_out, const char* tpl_name);// { if (defined_functions.has(tpl_name)) dumpFunction(dump_out, defined_functions[tpl_name]); else printf("; Error: function %s is not defined\n", tpl_name); }
     void dumpFunction(ostream& dump_out, const std::string s);// { dumpFunction(dump_out, s.c_str()); }
 
-    void dumpFunction(ostream& dump_out, const Tterm& t);// { dumpFunction(dump_out, TFun(t, getSortRef(t.getBody()))); }
-
     PTRef instantiateFunctionTemplate(const char* fname, Map<PTRef, PTRef, PTRefHash>&);
-
-    bool implies(PTRef, PTRef); // Check the result with an external solver
 
     PartitionInfo partitionInfo;
 
     PTRef getPartitionA(const ipartitions_t&);
     PTRef getPartitionB(const ipartitions_t&);
-    bool verifyInterpolantA(PTRef, const ipartitions_t&);
-    bool verifyInterpolantB(PTRef, const ipartitions_t&);
-    bool verifyInterpolant(PTRef, const ipartitions_t&);
 
     //partitions:
     ipartitions_t& getIPartitions(PTRef _t) { return partitionInfo.getIPartitions(_t); }

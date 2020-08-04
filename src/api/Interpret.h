@@ -30,13 +30,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "SStore.h"
 #include "PtStructs.h"
 #include "SymRef.h"
-
-// forward declarations
-class Logic;
-class Theory;
-class SimpSMTSolver;
-class MainSolver;
-class THandler;
+#include "Logic.h"
+#include "LogicFactory.h"
+#include "MainSolver.h"
 
 class LetFrame {
   private:
@@ -63,17 +59,11 @@ class LetFrame {
 
 class Interpret {
   protected:
-    SMTConfig      &config;
-    Logic          *logic;
-    Theory         *theory;
-    THandler       *thandler;
-    SimpSMTSolver  *solver;
-    MainSolver     *main_solver;
+    SMTConfig &     config;
+    std::unique_ptr<Logic> logic;
+    std::unique_ptr<MainSolver> main_solver;
 
     bool            f_exit;
-    int             asrt_lev;
-    int             sat_calls; // number of sat calls
-    bool            parse_only;
 
     // Named terms for getting variable values
     Map<const char*,PTRef,StringHash,Equal<const char*>> nameToTerm;
@@ -85,6 +75,8 @@ class Interpret {
     vec<PTRef>      assertions;
     vec<SymRef>     user_declarations;
 
+    void                        initializeLogic(opensmt::Logic_t logicType);
+    bool                        isInitialized() const { return logic.get() != nullptr; }
     char*                       buildSortName(ASTNode& n);
     SRef                        newSort      (ASTNode& n);
 
@@ -116,25 +108,12 @@ class Interpret {
     PTRef                       insertTerm(const char* s, const vec<PTRef>& args);
 
 
-
-    virtual void new_solver();
-
   public:
 
-
-    Interpret(SMTConfig& c, Logic *_l, Theory *_t, THandler *_th, SimpSMTSolver *_s, MainSolver *_m)
+    Interpret(SMTConfig& c)
         : config     (c)
-        , logic      (_l)
-        , theory     (_t)
-        , thandler   (_th)
-        , solver     (_s)
-        , main_solver(_m)
         , f_exit     (false)
-        , asrt_lev   (0)
-        , sat_calls  (0)
-        , parse_only (false) { }
-
-    Interpret(SMTConfig& c) : Interpret(c, nullptr, nullptr, nullptr, nullptr, nullptr) { }
+        { }
 
     ~Interpret();
 
@@ -145,18 +124,15 @@ class Interpret {
     void    execute(const ASTNode* n);
     bool    gotExit() const { return f_exit; }
 
-
     ValPair getValue       (PTRef tr) const;
     bool    getAssignment  ();
 
     void    reportError(char const * msg) { notify_formatted(true, msg); }
 
-
     PTRef getParsedFormula();
     vec<PTRef>& getAssertions() { return assertions; }
     bool is_top_level_assertion(PTRef ref);
     int get_assertion_index(PTRef ref);
-    void setParseOnly() { parse_only = true; }
 };
 
 #endif

@@ -30,22 +30,21 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "TermMapper.h"
 #include "TSolverHandler.h"
 #include "Theory.h"
-#include "TSolver.h"
 
 class THandler
 {
 private:
-    Theory             &theory;
-    TermMapper         &tmap;                     // Mappings between TRefs and Lits
+    Theory &          theory;
+    TermMapper &      tmap;                     // Mappings between TRefs and Lits
 public:
 
-    THandler(Theory & tsh)
+    THandler(Theory & tsh, TermMapper & termMapper)
     : theory             (tsh)
-    , tmap               (tsh.getTmap())
+    , tmap               (termMapper)
     , checked_trail_size (0)
     { }
 
-    virtual ~THandler ( ) { }
+    ~THandler() = default;
 
     void clear();// { getSolverHandler().clearSolver(); }  // Clear the solvers from their states
 
@@ -63,7 +62,7 @@ public:
     Lit     getDeduction         ();                      // Returns a literal that is implied by the current state and the reason literal
     Lit     getSuggestion        ( );                     // Returns a literal that is suggested by the current state
     void    getReason            ( Lit, vec< Lit > &);    // Returns the explanation for a deduced literal
-    PTRef   getSubstitution     (PTRef tr);               // Returns the substituted term, or PTRef_Undef if this term was not substituted
+    PTRef   getSubstitution     (PTRef tr) const;         // Returns the substituted term, or PTRef_Undef if this term was not substituted
 
     ValPair getValue          (PTRef tr) const ;//{ return getSolverHandler().getValue(tr); };
 

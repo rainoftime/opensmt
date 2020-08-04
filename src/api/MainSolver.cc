@@ -29,6 +29,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "DimacsParser.h"
 #include "Interpret.h"
 #include "BoolRewriting.h"
+#include "LookaheadSMTSolver.h"
+#include "LookaheadSplitter.h"
+#include "GhostSMTSolver.h"
+#include "UFLRATheory.h"
+#include "OsmtApiException.h"
+
+
 #include <thread>
 #include <random>
 #include <sys/types.h>
@@ -82,6 +89,17 @@ MainSolver::push(PTRef root)
     if (res == s_Error)
         printf("%s\n", msg);
     return res;
+}
+
+void
+MainSolver::insertFormula(PTRef fla) {
+    char* msg;
+    auto res = insertFormula(fla, &msg);
+    if (res == s_Error) {
+        OsmtApiException ex(msg);
+        free(msg);
+        throw ex;
+    }
 }
 
 sstat
@@ -419,18 +437,67 @@ sstat MainSolver::solve()
     return status;
 }
 
-bool
-MainSolver::readFormulaFromFile(const char *file)
-{
-    FILE *f;
-    if((f = fopen(file, "rt")) == NULL)
-    {
-        //opensmt_error("can't open file");
-        return false;
-    }
-    Interpret interp(config, &logic, &getTheory(), &thandler, smt_solver, this);
-    interp.setParseOnly();
-    interp.interpFile(f);
-    return true;
+std::unique_ptr<SimpSMTSolver> MainSolver::createInnerSolver(SMTConfig & config, THandler & thandler) {
+    SimpSMTSolver* solver = nullptr;
+    if (config.sat_pure_lookahead())
+        solver = new LookaheadSMTSolver(config, thandler);
+    else if (config.sat_lookahead_split())
+        solver = new LookaheadSplitter(config, thandler);
+    else if (config.use_ghost_vars())
+        solver = new GhostSMTSolver(config, thandler);
+    else
+        solver = new SimpSMTSolver(config, thandler);
+
+    return std::unique_ptr<SimpSMTSolver>(solver);
+}
+
+std::unique_ptr<Theory> MainSolver::createTheory(Logic & logic, SMTConfig & config) {
+    using Logic_t = opensmt::Logic_t;
+    Logic_t logicType = logic.getLogic();
+    Theory* theory = nullptr;
+    switch (logicType) {
+        case Logic_t::QF_UF:
+        case Logic_t::QF_BOOL:
+        {
+            theory = new UFTheory(config, logic);
+            break;
+        }
+        case Logic_t::QF_CUF:
+        case Logic_t::QF_BV:
+        {
+            BVLogic & bvLogic = dynamic_cast<BVLogic &>(logic);
+            theory = new CUFTheory(config, bvLogic);
+            break;
+        }
+        case Logic_t::QF_LRA:
+        case Logic_t::QF_RDL:
+        {
+            LRALogic & lraLogic = dynamic_cast<LRALogic &>(logic);
+            theory = new LRATheory(config, lraLogic);
+            break;
+        }
+        case Logic_t::QF_LIA:
+        case Logic_t::QF_IDL:
+        {
+            LIALogic & liaLogic = dynamic_cast<LIALogic &>(logic);
+            theory = new LIATheory(config, liaLogic);
+            break;
+        }
+        case Logic_t::QF_UFLRA:
+        {
+            LRALogic & lraLogic = dynamic_cast<LRALogic &>(logic);
+            theory = new UFLRATheory(config, lraLogic);
+            break;
+        }
+        case Logic_t::UNDEF:
+            throw OsmtApiException{"Error in creating reasoning engine: Engige type not specified"};
+            break;
+        default:
+            assert(false);
+            throw std::logic_error{"Unreachable code - error in logic selection"};
+
+    };
+
+    return std::unique_ptr<Theory>(theory);
 }
 

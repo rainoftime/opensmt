@@ -29,13 +29,10 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "TreeOps.h"
 #include "Global.h"
 #include "Deductions.h"
-#include "SMTConfig.h"
-#include <queue>
-#include <set>
 #include "SubstLoopBreaker.h"
 
-#include <sys/wait.h>
-
+#include <queue>
+#include <set>
 
 using namespace std;
 
@@ -67,9 +64,8 @@ const char* Logic::s_ite_prefix = ".oite";
 const char* Logic::s_framev_prefix = ".frame";
 
 // The constructor initiates the base logic (Boolean)
-Logic::Logic(SMTConfig& c) :
+Logic::Logic() :
       distinctClassCount(0)
-    , config(c)
     , sort_store(id_store)
     , term_store(sym_store)
     , sym_TRUE(SymRef_Undef)
@@ -89,9 +85,6 @@ Logic::Logic(SMTConfig& c) :
     , term_FALSE(PTRef_Undef)
     , subst_num(0)
 {
-    logic_type = opensmt::Logic_t::QF_UF;
-    config.logic = logic_type;
-
     char* msg;
     // We can't use declareSort here since it assumes that sort_BOOL
     // exists for making the equality symbol!
@@ -225,18 +218,6 @@ Logic::~Logic()
     cerr << "; -------------------------\n";
     cerr << "; Substitutions............: " << subst_num << endl;
 #endif // STATISTICS
-}
-
-const opensmt::Logic_t
-Logic::getLogic() const
-{
-    return logic_type;
-}
-
-const char*
-Logic::getName() const
-{
-    return "QF_UF";
 }
 
 //
@@ -1180,23 +1161,10 @@ bool Logic::defineFun(const char* fname, const vec<PTRef>& args, SRef rsort, PTR
     if (defined_functions.has(fname))
         return false; // already there
     TFun tpl_fun(fname, args, rsort, tr);
-    // This part is a bit silly..
-    Tterm tmp;
-    defined_functions_vec.push(tmp);
-    Tterm& t = defined_functions_vec.last();
-    t.setName(tpl_fun.getName());
-    t.setBody(tpl_fun.getBody());
-    for (int i = 0; i < args.size(); i++) {
-        t.addArg(args[i]);
-    }
-    defined_functions.insert(t.getName(), tpl_fun);
+    defined_functions.insert(tpl_fun.getName(), tpl_fun);
     return true;
 }
 
-vec<Tterm>& Logic::getFunctions()
-{
-    return defined_functions_vec;
-}
 PTRef Logic::insertTerm(SymRef sym, vec<PTRef>& terms, char** msg)
 {
     if(sym == getSym_and())
@@ -1939,59 +1907,6 @@ Logic::instantiateFunctionTemplate(const char* fname, Map<PTRef, PTRef,PTRefHash
     return tr_subst;
 }
 
-
-bool
-Logic::implies(PTRef implicant, PTRef implicated)
-{
-    Logic& logic = *this;
-    const char * implies = "implies.smt2";
-    std::ofstream dump_out( implies );
-    logic.dumpHeaderToFile(dump_out);
-
-    logic.dumpFormulaToFile(dump_out, implicant);
-    logic.dumpFormulaToFile(dump_out, implicated, true);
-    dump_out << "(check-sat)" << endl;
-    dump_out << "(exit)" << endl;
-    dump_out.close( );
-    // Check !
-    bool tool_res;
-    int pid = fork();
-    if(pid == -1){
-        std::cerr << "Failed to fork\n";
-        // consider throwing and exception
-        return false;
-    }
-    else if( pid == 0){
-        // child process
-        execlp( config.certifying_solver, config.certifying_solver, implies, NULL );
-        perror( "Child process error: " );
-        exit( 1 );
-    }
-    else{
-        // parent
-        int status;
-        waitpid(pid, &status, 0);
-        switch ( WEXITSTATUS( status ) )
-        {
-            case 0:
-//                std::cerr << "Implication holds!\n";
-                tool_res = false;
-                break;
-            case 1:
-//                std::cerr << "Implication does not hold!\n";
-//                std::cerr << "Antecedent: " << logic.printTerm(implicant) << '\n';
-//                std::cerr << "Consequent: " << logic.printTerm(implicated) << '\n';
-                tool_res = true;
-                break;
-            default:
-                perror( "Parent process error" );
-                exit( EXIT_FAILURE );
-        }
-    }
-
-    return !tool_res;
-}
-
 void Logic::conjoinItes(PTRef root, PTRef& new_root)
 {
     std::vector<bool> seen;
@@ -2066,13 +1981,6 @@ ipartitions_t Logic::computeAllowedPartitions(PTRef p) {
     return allowed;
 }
 
-bool
-Logic::verifyInterpolantA(PTRef itp, const ipartitions_t& mask)
-{
-    // Check A -> I, i.e., A & !I
-    return implies(getPartitionA(mask), itp);
-}
-
 PTRef
 Logic::getPartitionA(const ipartitions_t& mask)
 {
@@ -2128,33 +2036,6 @@ Logic::getPartitionB(const ipartitions_t& mask)
     }
     PTRef B = logic.mkAnd(b_args);
     return B;
-}
-
-bool
-Logic::verifyInterpolantB(PTRef itp, const ipartitions_t& mask)
-{
-    Logic& logic = *this;
-    PTRef nB = logic.mkNot(getPartitionB(mask));
-    // Check A -> I, i.e., A & !I
-    return implies(itp, nB);
-}
-
-bool
-Logic::verifyInterpolant(PTRef itp, const ipartitions_t& mask)
-{
-    if(verbose())
-        cout << "; Verifying final interpolant" << endl;
-    bool res = verifyInterpolantA(itp, mask);
-    if(!res)
-        opensmt_error("A -> I does not hold");
-    if(verbose())
-        cout << "; A -> I holds" << endl;
-    res = verifyInterpolantB(itp, mask);
-    if(!res)
-        opensmt_error("I -> !B does not hold");
-    if(verbose())
-        cout << "; B -> !I holds" << endl;
-    return res;
 }
 
 void
@@ -2247,8 +2128,6 @@ void Logic::dumpFunctions(ostream& dump_out) { vec<const char*> names; defined_f
 void Logic::dumpFunction(ostream& dump_out, const char* tpl_name) { if (defined_functions.has(tpl_name)) dumpFunction(dump_out, defined_functions[tpl_name]); else printf("; Error: function %s is not defined\n", tpl_name); }
 void Logic::dumpFunction(ostream& dump_out, const std::string s) { dumpFunction(dump_out, s.c_str()); }
 
-void Logic::dumpFunction(ostream& dump_out, const Tterm& t) { dumpFunction(dump_out, TFun(t, getSortRef(t.getBody()))); }
-
 // The Boolean connectives
 SymRef        Logic::getSym_true      ()              const { return sym_TRUE;     }
 SymRef        Logic::getSym_false     ()              const { return sym_FALSE;    }
@@ -2320,5 +2199,3 @@ char* Logic::printTerm        (PTRef tr, bool l, bool s) const { return printTer
 void Logic::termSort(vec<PTRef>& v) const { sort(v, LessThan_PTRef()); }
 
 void  Logic::purify     (PTRef r, PTRef& p, lbool& sgn) const {p = r; sgn = l_True; while (isNot(p)) { sgn = sgn^1; p = getPterm(p)[0]; }}
-
-inline int     Logic::verbose                       ( ) const { return config.verbosity(); }

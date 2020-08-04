@@ -47,7 +47,7 @@ protected:
 
     Map<PTRef,bool,PTRefHash> la_split_inequalities;
 public:
-    LALogic(SMTConfig &c);
+    LALogic();
     ~LALogic() { for(int i = 0; i < numbers.size(); ++i) {delete numbers[i];}}
     virtual bool    isBuiltinFunction(SymRef sr) const override;
     virtual PTRef   insertTerm      (SymRef sym, vec<PTRef>& terms, char** msg) override;
@@ -127,6 +127,7 @@ public:
     virtual PTRef mkNumPlus(const vec<PTRef> &, char **);
     virtual PTRef mkNumPlus(const vec<PTRef> &args);
     virtual PTRef mkNumPlus(const std::vector<PTRef> &args);
+    virtual PTRef mkNumPlus(const PTRef p1, const PTRef p2);
     virtual PTRef mkNumTimes(const vec<PTRef> &, char **);
     virtual PTRef mkNumTimes(const vec<PTRef> &args);
     virtual PTRef mkNumTimes(const PTRef p1, const PTRef p2);

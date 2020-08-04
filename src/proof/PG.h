@@ -266,17 +266,17 @@ class ProofGraph
 {
 public:
 
-	ProofGraph ( SMTConfig &     c
+	ProofGraph ( SMTConfig &  c
 			, CoreSMTSolver & s
-			, Theory &      th
+			, Theory &        th
+			, TermMapper &    termMapper
 			, Proof &         t
 			, int             n = -1 )
 : config   ( c )
 , solver   ( s )
-, theory ( th )
 , proof	   ( t )
 , logic_ ( th.getLogic() )
-, thandler {new THandler(th)}
+, thandler {new THandler(th, termMapper)}
 , graph_   ( new vector<ProofNode*> )
 , graph    ( *graph_ )
 , vars_suggested_color_map ( NULL )
@@ -514,9 +514,9 @@ public:
 
 private:
 
-    inline Lit PTRefToLit(PTRef ref) const {return theory.getTmap().getLit(ref);}
-    inline Var PTRefToVar(PTRef ref) const { return theory.getTmap().getVar(ref); }
-    inline PTRef varToPTRef(Var v) const { return theory.getTmap().varToPTRef(v); }
+    inline Lit PTRefToLit(PTRef ref) const {return thandler->getTMap().getLit(ref);}
+    inline Var PTRefToVar(PTRef ref) const { return thandler->getTMap().getVar(ref); }
+    inline PTRef varToPTRef(Var v) const { return thandler->getTMap().varToPTRef(v); }
 
     void initTSolver();
     void clearTSolver();
@@ -540,7 +540,6 @@ private:
 
     SMTConfig &           config;
     CoreSMTSolver &       solver;
-    Theory &              theory;
     //Egraph &              egraph;
     Proof &				  proof;
     Logic &               logic_;

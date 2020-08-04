@@ -23,8 +23,8 @@ const char* LIALogic::tk_int_geq   = ">=";
 
 const char* LIALogic::s_sort_integer = "Int";
 
-LIALogic::LIALogic(SMTConfig& c) :
-        LALogic(c)
+LIALogic::LIALogic() :
+    LALogic()
         , sym_Int_ZERO(SymRef_Undef)
         , sym_Int_ONE(SymRef_Undef)
         , sym_Int_NEG(SymRef_Undef)
@@ -46,8 +46,6 @@ LIALogic::LIALogic(SMTConfig& c) :
 {
     char* m;
     char** msg = &m;
-
-    logic_type = opensmt::Logic_t::QF_LIA;
 
     sort_INTEGER = declareSort(s_sort_integer, msg);
     ufsorts.remove(sort_INTEGER);

@@ -18,8 +18,11 @@ along with Periplo. If not, see <http://www.gnu.org/licenses/>.
  *********************************************************************/
 
 #include "PG.h"
-#include <sys/wait.h>
+
+#include "VerificationUtils.h"
+
 #include <fstream>
+#include <sys/wait.h>
 
 bool
 ProofGraph::verifyPartialInterpolant(ProofNode *n, const ipartitions_t& mask)
@@ -47,7 +50,7 @@ bool
 ProofGraph::verifyPartialInterpolantA(ProofNode *n, const ipartitions_t& mask)
 {
     // Check A /\ ~(C|a,ab) -> I, i.e., A /\ ~(C|a,ab) /\ ~I unsat
-    Logic& logic = theory.getLogic();
+    Logic& logic = this->logic_;
     icolor_t var_class;
     icolor_t var_color;
     vector< Lit > & cl = n->getClause();
@@ -90,7 +93,7 @@ ProofGraph::verifyPartialInterpolantA(ProofNode *n, const ipartitions_t& mask)
     cout << "; PARTIAL INTERPOLANT IS " << logic.printTerm(n->getPartialInterpolant()) << endl;
     */
 
-    bool res = logic.implies(implicant, n->getPartialInterpolant());
+    bool res = VerificationUtils(config, logic).implies(implicant, n->getPartialInterpolant());
     assert(res);
     return res;
 }
@@ -99,7 +102,7 @@ bool
 ProofGraph::verifyPartialInterpolantB(ProofNode *n, const ipartitions_t& mask)
 {
     // Check B /\ ~(C|b,ab) -> ~I, i.e., B /\ ~(C|b,ab) /\ I unsat 
-    Logic& logic = theory.getLogic();
+    Logic& logic = this->logic_;
     icolor_t var_class;
     icolor_t var_color;
     vector< Lit > & cl = n->getClause();
@@ -142,7 +145,7 @@ ProofGraph::verifyPartialInterpolantB(ProofNode *n, const ipartitions_t& mask)
     cout << "; PARTIAL INTERPOLANT IS " << logic.printTerm(n->getPartialInterpolant()) << endl;
     */
 
-    bool res = logic.implies(implicant, logic.mkNot(n->getPartialInterpolant()));
+    bool res = VerificationUtils(config, logic).implies(implicant, logic.mkNot(n->getPartialInterpolant()));
     assert(res);
     return res;
 }

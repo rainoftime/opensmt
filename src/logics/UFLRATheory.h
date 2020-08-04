@@ -32,16 +32,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 class UFLRATheory : public Theory
 {
   private:
-    LRALogic      lralogic;
-    TermMapper    tmap;
+    LRALogic &    lralogic;
     UFLRATHandler uflratshandler;
   public:
-    virtual TermMapper& getTmap() { return tmap; }
-    UFLRATheory(SMTConfig& c)
+    UFLRATheory(SMTConfig& c, LRALogic & logic)
         : Theory(c)
-        , lralogic(c)
-        , tmap(lralogic)
-        , uflratshandler(c, lralogic, tmap)
+        , lralogic(logic)
+        , uflratshandler(c, lralogic)
     { }
     virtual LRALogic& getLogic() { return lralogic; }
     virtual UFLRATHandler& getTSolverHandler() { return uflratshandler; }

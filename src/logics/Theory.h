@@ -164,7 +164,6 @@ class Theory
   public:
 
     PushFrameAllocator      pfstore {1024};
-    virtual TermMapper     &getTmap() = 0;
     virtual Logic          &getLogic()              = 0;
     virtual TSolverHandler &getTSolverHandler()     = 0;
     virtual bool            simplify(const vec<PFRef>&, int) = 0; // Simplify a vector of PushFrames in an incrementality-aware manner
@@ -176,84 +175,72 @@ class Theory
 class LRATheory : public Theory
 {
   protected:
-    LRALogic    lralogic;
-    TermMapper  tmap;
+    LRALogic&    lralogic;
     LRATHandler lratshandler;
   public:
-    virtual TermMapper& getTmap();// { return tmap; }
-    LRATheory(SMTConfig& c)
+    LRATheory(SMTConfig & c, LRALogic & logic)
         : Theory(c)
-        , lralogic(c)
-        , tmap(lralogic)
-        , lratshandler(c, lralogic, tmap)
+        , lralogic(logic)
+        , lratshandler(c, lralogic)
     { }
     ~LRATheory() {};
-    virtual LRALogic&    getLogic();//    { return lralogic; }
-    virtual LRATHandler& getTSolverHandler();// { return lratshandler; }
-    virtual bool simplify(const vec<PFRef>&, int); // Theory specific simplifications
+    virtual LRALogic&    getLogic() override { return lralogic; }
+    virtual LRATHandler& getTSolverHandler() override { return lratshandler; }
+    virtual bool simplify(const vec<PFRef>&, int) override; // Theory specific simplifications
 };
 
 class LIATheory : public Theory
 {
 protected:
-    LIALogic    lialogic;
-    TermMapper  tmap;
+    LIALogic &  lialogic;
     LIATHandler liatshandler;
 public:
-    virtual TermMapper& getTmap();// { return tmap; }
-    LIATheory(SMTConfig& c)
+    LIATheory(SMTConfig & c, LIALogic & logic)
     : Theory(c)
-    , lialogic(c)
-    , tmap(lialogic)
-    , liatshandler(c, lialogic, tmap)
+    , lialogic(logic)
+    , liatshandler(c, lialogic)
     { }
     ~LIATheory() {};
-    virtual LIALogic&    getLogic();//    { return lialogic; }
-    virtual LIATHandler& getTSolverHandler();// { return liatshandler; }
-    virtual bool simplify(const vec<PFRef>&, int);
+    virtual LIALogic& getLogic() override { return lialogic; }
+    virtual LIATHandler& getTSolverHandler() override { return liatshandler; }
+    virtual bool simplify(const vec<PFRef>&, int) override;
 };
 
 class UFTheory : public Theory
 {
   private:
-    Logic      uflogic;
-    TermMapper  tmap;
+    Logic &    uflogic;
     UFTHandler tshandler;
   public:
-    UFTheory(SMTConfig& c)
+    UFTheory(SMTConfig & c, Logic & logic )
         : Theory(c)
-        , uflogic(c)
-        , tmap(uflogic)
-        , tshandler(c, uflogic, tmap)
-    {}
+        , uflogic(logic)
+        , tshandler(c, uflogic)
+    { }
     ~UFTheory() {}
-    virtual TermMapper&  getTmap()              { return tmap; }
-    virtual Logic&       getLogic()             { return uflogic; }
-    virtual UFTHandler&  getTSolverHandler()    { return tshandler; }
+    virtual Logic& getLogic() override { return uflogic; }
+    virtual UFTHandler&  getTSolverHandler() override  { return tshandler; }
     virtual const UFTHandler& getTSolverHandler() const { return tshandler; }
-    virtual bool simplify(const vec<PFRef>&, int);
+    virtual bool simplify(const vec<PFRef>&, int) override;
 };
 
 class CUFTheory : public Theory
 {
   private:
-    BVLogic     cuflogic;
-    TermMapper  tmap;
+    BVLogic &   cuflogic;
     CUFTHandler tshandler;
     static const int i_default_bitwidth;
   public:
-    CUFTheory(SMTConfig& c, int width = i_default_bitwidth)
+    CUFTheory(SMTConfig & c, BVLogic & logic)
       : Theory(c)
-      , cuflogic(c, width)
-      , tmap(cuflogic)
-      , tshandler(c, cuflogic, tmap)
-    {}
+      , cuflogic(logic)
+      , tshandler(c, cuflogic)
+    { }
     ~CUFTheory() {}
-    virtual TermMapper& getTmap()            { return tmap; }
-    virtual BVLogic&  getLogic()             { return cuflogic; }
-    virtual CUFTHandler& getTSolverHandler() { return tshandler; }
+    virtual BVLogic&  getLogic() override { return cuflogic; }
+    virtual CUFTHandler& getTSolverHandler() override { return tshandler; }
     virtual const CUFTHandler& getTSolverHandler() const { return tshandler; }
-    virtual bool simplify(const vec<PFRef>&, int);
+    virtual bool simplify(const vec<PFRef>&, int) override;
 };
 
 

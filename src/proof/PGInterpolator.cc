@@ -17,13 +17,14 @@ You should have received a copy of the GNU General Public License
 along with Periplo. If not, see <http://www.gnu.org/licenses/>.
  *********************************************************************/
 
+#include "PG.h"
+
+#include "VerificationUtils.h"
+#include "BoolRewriting.h"
+
 #include <cstdio>
 #include <iostream>
 #include <fstream>
-
-
-#include "PG.h"
-#include "BoolRewriting.h"
 
 
 // Path interpolation
@@ -337,7 +338,7 @@ bool ProofGraph::producePathInterpolants ( vec<PTRef> &interpolants, const vec<i
             PTRef previous_itp = interpolants[interpolants.size() - 2];
             PTRef next_itp = interpolants[interpolants.size() -1];
             PTRef movedPartitions = logic_.mkAnd(logic_.getPartitions(A_masks[i] ^ A_masks[i-1]));
-            propertySatisfied &= logic_.implies(logic_.mkAnd(previous_itp, movedPartitions), next_itp);
+            propertySatisfied &= VerificationUtils(config, logic_).implies(logic_.mkAnd(previous_itp, movedPartitions), next_itp);
             if (!propertySatisfied){
                 std::cerr << "; Path interpolation does not hold for:\n"
                              << "First interpolant: " << logic_.printTerm(previous_itp) << '\n'
@@ -459,7 +460,8 @@ void ProofGraph::produceSingleInterpolant ( vec<PTRef> &interpolants, const ipar
                 opensmt_error("; Empty clause found in interpolation\n");
                 assert(false);
             }
-            if (cl.size() == 1 && varToPTRef(var(cl[0])) == theory.getLogic().getTerm_false() && !sign(cl[0])) {
+            Logic &logic = this->logic_;
+            if (cl.size() == 1 && varToPTRef(var(cl[0])) == logic.getTerm_false() && !sign(cl[0])) {
                 fal = true;
             }
 
@@ -467,7 +469,6 @@ void ProofGraph::produceSingleInterpolant ( vec<PTRef> &interpolants, const ipar
             {
                 //unit clause False exists, return degenerate interpolant
                 icolor_t cc = getClauseColor (n->getInterpPartitionMask(), A_mask);
-                Logic &logic = theory.getLogic();
                 interpolants.push( cc == I_A ? logic.getTerm_false() : logic.getTerm_true());
 
                 if (verbose()) {
@@ -577,7 +578,7 @@ void ProofGraph::produceSingleInterpolant ( vec<PTRef> &interpolants, const ipar
         //getComplexityInterpolant(partial_interp);
         
         int nbool, neq, nuf, nif;
-        theory.getLogic().collectStats(partial_interp, nbool, neq, nuf, nif);
+        this->logic_.collectStats(partial_interp, nbool, neq, nuf, nif);
         cerr << "; Number of boolean connectives: " << nbool << endl;
         cerr << "; Number of equalities: " << neq << endl;
         cerr << "; Number of uninterpreted functions: " << nuf << endl;
@@ -588,7 +589,7 @@ void ProofGraph::produceSingleInterpolant ( vec<PTRef> &interpolants, const ipar
     //if ( enabledInterpVerif() ) verifyPartialInterpolantFromLeaves( getRoot(), A_mask );
     if ( enabledInterpVerif() )
     {
-        bool sound = theory.getLogic().verifyInterpolant (getRoot()->getPartialInterpolant(), A_mask );
+        bool sound = VerificationUtils(config, logic_).verifyInterpolant (getRoot()->getPartialInterpolant(), A_mask );
 
         if(verbose())
         {
@@ -634,7 +635,7 @@ void ProofGraph::produceSingleInterpolant ( vec<PTRef> &interpolants, const ipar
 
     if(verbose() > 1)
     {
-        cout << "; Interpolant:\n" << theory.getLogic().printTerm(interpol) << endl;
+        cout << "; Interpolant:\n" << this->logic_.printTerm(interpol) << endl;
     }
 }
 

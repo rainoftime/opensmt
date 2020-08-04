@@ -91,14 +91,16 @@ class MainSolver
 
     };
 
-    Logic&              logic;
-    SMTConfig&          config;
-    THandler&           thandler;
-    PushFrameAllocator& pfstore;
-    TermMapper&         tmap;
-    SimpSMTSolver*      smt_solver;
-    Tseitin             ts;
-    PushFramesWrapper   frames;
+
+    std::unique_ptr<Theory>         theory;
+    TermMapper                      term_mapper;
+    THandler                        thandler;
+    std::unique_ptr<SimpSMTSolver>  smt_solver;
+    Logic&                          logic;
+    SMTConfig&                      config;
+    PushFrameAllocator&             pfstore;
+    Tseitin                         ts;
+    PushFramesWrapper               frames;
 
 
     opensmt::OSMTTimeVal query_timer; // How much time we spend solving.
@@ -142,29 +144,31 @@ class MainSolver
         }
     }
 
+    static std::unique_ptr<SimpSMTSolver> createInnerSolver(SMTConfig& config, THandler& thandler);
 
-
+    static std::unique_ptr<Theory> createTheory(Logic & logic, SMTConfig & config);
 
   public:
-    MainSolver(THandler& thandler, SMTConfig& c, SimpSMTSolver *s, const char* name)
-        : logic(thandler.getLogic())
-        , config(c)
-        , thandler(thandler)
-        , pfstore(getTheory().pfstore)
-        , tmap(thandler.getTMap())
-        , smt_solver(s)
-        , ts( config
-            , thandler.getLogic()
-            , tmap
-            , *s )
-        , solver_name {name}
-        , check_called(0)
-        , prev_query(PTRef_Undef)
-        , curr_query(PTRef_Undef)
-        , status(s_Undef)
-        , binary_init(false)
-        , root_instance(logic.getTerm_true())
+
+    MainSolver(Logic& logic, SMTConfig& conf, std::string name)
+        :
+        theory(createTheory(logic, conf)),
+        term_mapper(logic),
+        thandler(getTheory(), term_mapper),
+        smt_solver(createInnerSolver(conf, thandler)),
+        logic(thandler.getLogic()),
+        config(conf),
+        pfstore(getTheory().pfstore),
+        ts( config, logic, term_mapper, *smt_solver ),
+        solver_name {std::move(name)},
+        check_called(0),
+        prev_query(PTRef_Undef),
+        curr_query(PTRef_Undef),
+        status(s_Undef),
+        binary_init(false),
+        root_instance(logic.getTerm_true())
     {
+        conf.setUsedForInitiliazation();
         frames.push(pfstore.alloc());
         PushFrame& last = pfstore[frames.last()];
         last.push(logic.getTerm_true());
@@ -175,12 +179,13 @@ class MainSolver
     SimpSMTSolver& getSMTSolver() { return *smt_solver; }
 
     THandler &getTHandler() { return thandler; }
-    Logic    &getLogic()    { return thandler.getLogic(); }
-    Theory   &getTheory()   { return thandler.getTheory(); }
+    Logic    &getLogic()    { return logic; }
+    Theory   &getTheory()   { return *theory; }
     sstat     push(PTRef root);
     void      push();
     bool      pop();
     sstat     insertFormula(PTRef root, char** msg);
+    void      insertFormula(PTRef fla);
 
     void      initialize() { ts.solver.initialize(); ts.initialize(); }
 
@@ -209,8 +214,6 @@ class MainSolver
 
 
     void stop() { ts.solver.stop = true; }
-
-    bool readFormulaFromFile(const char *file);
 
     PTRef getPrevQuery() const { return prev_query; }
 };
