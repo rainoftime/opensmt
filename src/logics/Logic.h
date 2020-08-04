@@ -250,7 +250,16 @@ class Logic {
     PtermIter   getPtermIter  ()                            { return term_store.getPtermIter(); }
 
     // Default values for the logic
+
+    // Deprecated! Use getDefaultValuePTRef instead
     virtual const char* getDefaultValue(const PTRef tr) const;
+
+    // Returns the default value of the sort of the argument term
+    PTRef getDefaultValuePTRef(const PTRef tr) const { return getDefaultValuePTRef(getSortRef(tr)); }
+
+    // Returns the default value of the given sort
+    virtual PTRef getDefaultValuePTRef(const SRef sref) const;
+
     PTRef       mkUninterpFun (SymRef f, const vec<PTRef>& args);
     // Boolean term generation
     PTRef       mkAnd         (vec<PTRef>&);
@@ -456,7 +465,7 @@ class Logic {
     void getNewFacts(PTRef root, Map<PTRef, lbool, PTRefHash> & facts);
     bool varsubstitute(PTRef  root, const Map<PTRef, PtAsgn, PTRefHash> & substs, PTRef & tr_new);  // Do the substitution.  Return true if at least one substitution was done, and false otherwise.
     virtual lbool retrieveSubstitutions(const vec<PtAsgn>& units, Map<PTRef,PtAsgn,PTRefHash>& substs);
-
+    void substitutionsTransitiveClosure(Map<PTRef, PtAsgn, PTRefHash> & substs);
 
 
 

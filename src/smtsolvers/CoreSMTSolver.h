@@ -66,6 +66,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 class Proof;
 class ProofGraph;
+class ModelBuilder;
 
 // Helper method to print Literal to a stream
 std::ostream& operator <<(std::ostream& out, Lit l); // MB: Feel free to find a better place for this method.
@@ -327,6 +328,8 @@ public:
     int     nLearnts   ()      const;       // The current number of learnt clauses.
     int     nVars      ()      const;       // The current number of variables.
     int     nFreeVars  ()      const;
+
+    void fillBooleanVars(ModelBuilder & modelBuilder);
 
     // Resource contraints:
     //

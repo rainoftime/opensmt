@@ -674,6 +674,12 @@ Logic::getDefaultValue(const PTRef tr) const
 }
 
 PTRef
+Logic::getDefaultValuePTRef(const SRef sref) const {
+    if (sref == sort_BOOL) { return term_TRUE; }
+    throw "default values not implemented yet for uninterpreted sorts\n";
+}
+
+PTRef
 Logic::mkIte(vec<PTRef>& args)
 {
     if (!hasSortBool(args[0])) return PTRef_Undef;
@@ -1532,6 +1538,28 @@ lbool Logic::retrieveSubstitutions(const vec<PtAsgn>& facts, Map<PTRef,PtAsgn,PT
     return l_Undef;
 }
 
+void Logic::substitutionsTransitiveClosure(Map<PTRef, PtAsgn, PTRefHash> & substs) {
+    bool changed = true;
+    auto keyValPairs = substs.getKeysAndValsPtrs(); // We can use direct pointers, since no elements are inserted or deleted in the loop
+    std::vector<char> notChangedElems(keyValPairs.size(), 0); // True if not changed in last iteration, initially False
+    while (changed) {
+        changed = false;
+        for (int i = 0; i < keyValPairs.size(); ++i) {
+            auto & val = keyValPairs[i]->data;
+            if (val.sgn != l_True || notChangedElems[i]) { continue; }
+            PTRef newVal = PTRef_Undef;
+            PTRef oldVal = val.tr;
+            this->varsubstitute(oldVal, substs, newVal);
+            if (oldVal != newVal) {
+                changed = true;
+                val = PtAsgn(newVal, l_True);
+            }
+            else {
+                notChangedElems[i] = 1;
+            }
+        }
+    }
+}
 
 //
 // TODO: Also this should most likely be dependent on the theory being
