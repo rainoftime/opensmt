@@ -21,14 +21,11 @@ add_library(api OBJECT "")
 
 
 set(PRIVATE_SOURCES_TO_ADD
-	"${CMAKE_CURRENT_SOURCE_DIR}/Interpret.cc"
 	"${CMAKE_CURRENT_SOURCE_DIR}/MainSolver.cc"
 )
 
 set(PUBLIC_SOURCES_TO_ADD
-	"${CMAKE_CURRENT_SOURCE_DIR}/Interpret.h"
 	"${CMAKE_CURRENT_SOURCE_DIR}/MainSolver.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}/DimacsParser.h"
 	"${CMAKE_CURRENT_SOURCE_DIR}/smt2tokens.h"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Opensmt.cc"
 )
@@ -40,29 +37,26 @@ PUBLIC ${PUBLIC_SOURCES_TO_ADD}
 
 set(OBJECTS_TO_ADD $<TARGET_OBJECTS:api> ${OBJECTS_TO_ADD})
 
-if (NOT USE_READLINE)
-  set(line_library ${LibEdit_LIBRARIES})
-else()
-  set(line_library ${Readline_LIBRARY})
-endif()
-
 if (BUILD_SHARED_LIBS)
   add_library(api_shared SHARED ${OBJECTS_TO_ADD})
-  target_link_libraries(api_shared ${line_library} ${GMP_LIBRARIES} ${GMPXX_LIBRARIES} Threads::Threads)
-  set_target_properties(api_shared PROPERTIES OUTPUT_NAME opensmt2)
-  target_include_directories(api_shared
-                             PRIVATE
-                             ${LibEdit_INCLUDE_DIRS})
-  install(TARGETS api_shared DESTINATION lib)
+  target_link_libraries(api_shared ${GMP_LIBRARIES} ${GMPXX_LIBRARIES} Threads::Threads)
+  set_target_properties(api_shared PROPERTIES 
+      OUTPUT_NAME opensmt
+      VERSION ${OPENSMT_VERSION}
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+      )
+  install(TARGETS api_shared LIBRARY DESTINATION lib)
 endif()
 
 if (BUILD_STATIC_LIBS)
   add_library(api_static STATIC ${OBJECTS_TO_ADD})
-  target_link_libraries(api_static ${line_library} ${GMP_LIBRARIES} ${GMPXX_LIBRARIES} Threads::Threads)
-  target_include_directories(api_static
-                             PRIVATE
-                             ${LibEdit_INCLUDE_DIRS})
-  set_target_properties(api_static PROPERTIES OUTPUT_NAME opensmt2)
+  target_link_libraries(api_static ${GMP_LIBRARIES} ${GMPXX_LIBRARIES} Threads::Threads)
+  set_target_properties(api_static PROPERTIES 
+      OUTPUT_NAME opensmt
+      VERSION ${OPENSMT_VERSION}
+      ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+      )
+  install(TARGETS api_static ARCHIVE DESTINATION lib)
 endif()
 
-install(FILES Opensmt.h smt2tokens.h MainSolver.h Interpret.h DESTINATION ${INSTALL_HEADERS_DIR})
+install(FILES Opensmt.h smt2tokens.h MainSolver.h DESTINATION ${INSTALL_HEADERS_DIR})

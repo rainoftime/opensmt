@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.3)
-project(opensmt VERSION 2.0.0 LANGUAGES CXX)
+
+if (POLICY CMP0074) # Policy 0074 has been introduced in CMake 3.12, so we need a check, otherwise older version would give an error
+cmake_policy(SET CMP0074 NEW)
+endif()
+
+set(OPENSMT_VERSION_MAJOR 2)
+set(OPENSMT_VERSION_MINOR 0)
+set(OPENSMT_VERSION_PATCH 1)
+set(OPENSMT_VERSION ${OPENSMT_VERSION_MAJOR}.${OPENSMT_VERSION_MINOR}.${OPENSMT_VERSION_PATCH})
+project(opensmt VERSION ${OPENSMT_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -44,14 +53,6 @@ option(BUILD_STATIC_LIBS "Build static library" ON)
 option(BUILD_SHARED_LIBS "Build shared library" ON)
 option(BUILD_EXECUTABLES "Build executables" ON)
 
-if (BUILD_EXECUTABLES)
-    if (NOT USE_READLINE)
-      find_package(LibEdit REQUIRED)
-    else()
-      find_package(Readline REQUIRED)
-    endif()
-endif(BUILD_EXECUTABLES)
-
 find_package(GMP REQUIRED)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -78,7 +79,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/proof
     ${CMAKE_SOURCE_DIR}/models
     ${CMAKE_SOURCE_DIR}/itehandler
-    ${GMP_INCLUDE_DIR}
+    ${GMP_INCLUDE_DIRS}
 )
 
 if (BUILD_EXECUTABLES AND NOT BUILD_STATIC_LIBS)
