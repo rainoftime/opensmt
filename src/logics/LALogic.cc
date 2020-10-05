@@ -5,6 +5,8 @@
 #include "LA.h"
 #include "LALogic.h"
 #include "FastRational.h"
+#include "OsmtInternalException.h"
+#include "OsmtApiException.h"
 
 #include <memory>
 
@@ -134,11 +136,11 @@ PTRef LALogic::normalizeMul(PTRef mul)
     PTRef v = PTRef_Undef;
     PTRef c = PTRef_Undef;
     splitTermToVarAndConst(mul, v, c);
-    opensmt::Number r = getNumConst(c); //PS. shall I add opensmt::Integer j = getNumConst(c)
-    if (r < 0) //PS. OR (l < 0)
+    if (getNumConst(c).sign() < 0) {
         return mkNumNeg(v);
-    else
+    } else {
         return v;
+    }
 }
 lbool LALogic::arithmeticElimination(const vec<PTRef> & top_level_arith, Map<PTRef, PtAsgn, PTRefHash> & substitutions)
 {
@@ -393,13 +395,7 @@ PTRef LALogic::mkNumTimes(const std::vector<PTRef> &args) {
     for (PTRef arg : args) { tmp.push(arg); }
     return mkNumTimes(tmp);
 }
-PTRef mkNumDiv(const vec<PTRef> &, char **);
-PTRef LALogic::mkNumDiv(const vec<PTRef> &args) {
-    char *msg;
-    PTRef tr = mkNumDiv(args, &msg);
-    assert(tr != PTRef_Undef);
-    return tr;
-}
+
 PTRef LALogic::mkNumDiv(const PTRef nom, const PTRef den) {
     vec<PTRef> tmp;
     tmp.push(nom), tmp.push(den);
@@ -477,7 +473,7 @@ PTRef LALogic::mkNumPlus(const vec<PTRef>& args, char** msg)
     SimplifyConstSum simp(*this);
     vec<PTRef> args_new;
     SymRef s_new;
-    simp.simplify(get_sym_Num_PLUS(), new_args, s_new, args_new, msg);
+    simp.simplify(get_sym_Num_PLUS(), new_args, s_new, args_new);
     if (args_new.size() == 1)
         return args_new[0];
     if (s_new != get_sym_Num_PLUS()) {
@@ -541,7 +537,7 @@ PTRef LALogic::mkNumTimes(const vec<PTRef>& tmp_args, char** msg)
     SimplifyConstTimes simp(*this);
     vec<PTRef> args_new;
     SymRef s_new;
-    simp.simplify(get_sym_Num_TIMES(), args, s_new, args_new, msg);
+    simp.simplify(get_sym_Num_TIMES(), args, s_new, args_new);
     PTRef tr = mkFun(s_new, args_new);
     // Either a real term or, if we constructed a multiplication of a
     // constant and a sum, a real sum.
@@ -552,7 +548,7 @@ PTRef LALogic::mkNumTimes(const vec<PTRef>& tmp_args, char** msg)
     }
 }
 
-PTRef LALogic::mkNumDiv(const vec<PTRef>& args, char** msg)
+PTRef LALogic::mkNumDiv(const vec<PTRef>& args)
 {
     SimplifyConstDiv simp(*this);
     vec<PTRef> args_new;
@@ -561,7 +557,7 @@ PTRef LALogic::mkNumDiv(const vec<PTRef>& args, char** msg)
     if(this->isNumZero(args[1])) {
         throw LADivisionByZeroException();
     }
-    simp.simplify(get_sym_Num_DIV(), args, s_new, args_new, msg);
+    simp.simplify(get_sym_Num_DIV(), args, s_new, args_new);
     if (isNumDiv(s_new)) {
         assert((isNumTerm(args_new[0]) || isNumPlus(args_new[0])) && isConstant(args_new[1]));
         args_new[1] = mkConst(FastRational_inverse(getNumConst(args_new[1]))); //mkConst(1/getRealConst(args_new[1]));
@@ -586,52 +582,28 @@ PTRef LALogic::mkNumLeq(PTRef lhs, PTRef rhs)
     // Should be in the form that on one side there is a constant
     // and on the other there is a sum
     PTRef sum_tmp = [&](){
-       if (lhs == getTerm_NumZero()) {return rhs;}
-       if (rhs == getTerm_NumZero()) {return mkNumNeg(lhs);}
+       if (lhs == getTerm_NumZero()) { return rhs; }
+       if (rhs == getTerm_NumZero()) { return mkNumNeg(lhs); }
        vec<PTRef> sum_args;
        sum_args.push(rhs);
        sum_args.push(mkNumNeg(lhs));
        return mkNumPlus(sum_args);
-    }();
+    }(); // now the inequality is "0 <= sum_tmp" where "sum_tmp = rhs - lhs"
     if (isConstant(sum_tmp)) {
         opensmt::Number const & v = this->getNumConst(sum_tmp);
         return v.sign() < 0 ? getTerm_false() : getTerm_true();
-    } if (isNumTimes(sum_tmp)) {
-        sum_tmp = normalizeMul(sum_tmp);
+    } if (isNumVarOrIte(sum_tmp) || isNumTimes(sum_tmp)) { // "sum_tmp = c * v", just scale to "v" or "-v" without changing the sign
+        sum_tmp = isNumTimes(sum_tmp) ? normalizeMul(sum_tmp) : sum_tmp;
+        vec<PTRef> args;
+        args.push(getTerm_NumZero());
+        args.push(sum_tmp);
+        return mkFun(get_sym_Num_LEQ(), args);
     } else if (isNumPlus(sum_tmp)) {
         // Normalize the sum
-        sum_tmp = normalizeSum(sum_tmp); //Now the sum is normalized by dividing with the "first" factor.
+        return sumToNormalizedInequality(sum_tmp);
     }
-    vec<PTRef> args;
-    args.push(getTerm_NumZero());
-    args.push(sum_tmp);
-    // Otherwise no operation, already normalized
-    if (isNumPlus(sum_tmp)) {
-        vec<PTRef> nonconst_args;
-        PTRef c = PTRef_Undef;
-        const Pterm& t = getPterm(sum_tmp);
-        nonconst_args.capacity(t.size());
-        for (int i = 0; i < t.size(); i++) {
-            if (!isConstant(t[i]))
-                nonconst_args.push(t[i]);
-            else {
-                assert(c == PTRef_Undef);
-                c = t[i];
-            }
-        }
-        if (c == PTRef_Undef) {
-            assert(args[1] == mkNumPlus(nonconst_args));
-            // The correct arguments are set up already
-        } else {
-            args[0] = mkNumNeg(c);
-            args[1] = nonconst_args.size() == 1 ? nonconst_args[0] : mkFun(get_sym_Num_PLUS(), nonconst_args);
-            assert(mkNumPlus(nonconst_args) == args[1]);
-        }
-    } else {
-        assert(isNumVarOrIte(sum_tmp) || isNumTimes(sum_tmp));
-    }
-    PTRef r = mkFun(get_sym_Num_LEQ(), args);
-    return r;
+    assert(false);
+    throw OsmtInternalException{"Unexpected situation in LALogic::mkNumLeq"};
 }
 
 PTRef LALogic::mkNumGeq(const vec<PTRef> & args)
@@ -665,19 +637,18 @@ PTRef LALogic::mkNumGt(const vec<PTRef> & args)
     }
     return mkNot(tr);
 }
-PTRef LALogic::insertTerm(SymRef sym, vec<PTRef>& terms, char **msg)
-
+PTRef LALogic::insertTerm(SymRef sym, vec<PTRef>& terms)
 {
     if (sym == get_sym_Num_NEG())
-        return mkNumNeg(terms[0], msg);
+        return mkNumNeg(terms[0]);
     if (sym == get_sym_Num_MINUS())
-        return mkNumMinus(terms, msg);
+        return mkNumMinus(terms);
     if (sym == get_sym_Num_PLUS())
-        return mkNumPlus(terms, msg);
+        return mkNumPlus(terms);
     if (sym == get_sym_Num_TIMES())
-        return mkNumTimes(terms, msg);
+        return mkNumTimes(terms);
     if (sym == get_sym_Num_DIV())
-        return mkNumDiv(terms, msg);
+        return mkNumDiv(terms);
     if (sym == get_sym_Num_LEQ())
         return mkNumLeq(terms);
     if (sym == get_sym_Num_LT())
@@ -688,8 +659,9 @@ PTRef LALogic::insertTerm(SymRef sym, vec<PTRef>& terms, char **msg)
         return mkNumGt(terms);
     if (sym == get_sym_Num_ITE())
         return mkIte(terms);
-    return Logic::insertTerm(sym, terms, msg);
+    return Logic::insertTerm(sym, terms);
 }
+
 PTRef LALogic::mkConst(const char *name, const char **msg)
 {
     return mkConst(getSort_num(), name);
@@ -724,7 +696,7 @@ PTRef LALogic::mkConst(SRef s, const char* name)
 // corresponding simplifications.  Examples include 0 with
 // multiplication and summation, e.g.
 //
-void SimplifyConst::simplify(const SymRef& s, const vec<PTRef>& args, SymRef& s_new, vec<PTRef>& args_new, char** msg)
+void SimplifyConst::simplify(const SymRef& s, const vec<PTRef>& args, SymRef& s_new, vec<PTRef>& args_new)
 {
     vec<int> const_idx;
     for (int i = 0; i < args.size(); i++) {
@@ -744,10 +716,8 @@ void SimplifyConst::simplify(const SymRef& s, const vec<PTRef>& args, SymRef& s_
             for (int i = 0; i < const_idx.size(); i++)
                 const_terms.push(args[const_idx[i]]);
             PTRef tr = simplifyConstOp(const_terms);
-            if (tr == PTRef_Undef) {
-                printf("%s\n", *msg);
-                assert(false);
-            }
+            assert(tr != PTRef_Undef);
+
             vec<PTRef> args_new_2;
             args_new_2.capacity((args.size() - const_terms.size()) + 1);
             int i, k;
@@ -993,6 +963,64 @@ LALogic::printTerm_(PTRef tr, bool ext, bool safe) const
     else
         out = Logic::printTerm_(tr, ext, safe);
     return out;
+}
+
+PTRef LALogic::sumToNormalizedInequality(PTRef sum) {
+    assert(isNumPlus(sum));
+    vec<PTRef> varFactors;
+    PTRef constant = PTRef_Undef;
+    Pterm const & s = getPterm(sum);
+    for (int i = 0; i < s.size(); i++) {
+        if (isConstant(s[i])) {
+            assert(constant == PTRef_Undef);
+            constant = s[i];
+        } else {
+            assert(isLinearFactor(s[i]));
+            varFactors.push(s[i]);
+        }
+    }
+
+    if (constant == PTRef_Undef) { constant = getTerm_NumZero(); }
+    opensmt::Number constantVal = getNumConst(constant);
+    assert(varFactors.size() > 0);
+    termSort(varFactors);
+    PTRef leadingFactor = varFactors[0];
+    // normalize the sum according to the leading factor
+    PTRef var, coeff;
+    splitTermToVarAndConst(leadingFactor, var, coeff);
+    opensmt::Number normalizationCoeff = abs(getNumConst(coeff));
+    // varFactors come from a normalized sum, no need to call normalization code again
+    PTRef normalizedSum = varFactors.size() == 1 ? varFactors[0] : insertTermHash(get_sym_Num_PLUS(), varFactors);
+    if (normalizationCoeff != 1) {
+        // normalize the whole sum
+        normalizedSum = mkNumTimes(normalizedSum, mkConst(normalizationCoeff.inverse()));
+        // DON'T forget to update also the constant factor!
+        constantVal /= normalizationCoeff;
+    }
+    constantVal.negate(); // moving the constant to the LHS of the inequality
+    return insertTermHash(get_sym_Num_LEQ(), {mkConst(constantVal), normalizedSum});
+}
+
+PTRef LALogic::getConstantFromLeq(PTRef leq) {
+    Pterm const & term = getPterm(leq);
+    if (not isNumLeq(term.symb())) {
+        throw OsmtApiException("LALogic::getConstantFromLeq called on a term that is not less-or-equal inequality");
+    }
+    return term[0];
+}
+
+PTRef LALogic::getTermFromLeq(PTRef leq) {
+    Pterm const & term = getPterm(leq);
+    if (not isNumLeq(term.symb())) {
+        throw OsmtApiException("LALogic::getConstantFromLeq called on a term that is not less-or-equal inequality");
+    }
+    return term[1];
+}
+
+std::pair<PTRef, PTRef> LALogic::leqToConstantAndTerm(PTRef leq) {
+    Pterm const & term = getPterm(leq);
+    assert(isNumLeq(term.symb()));
+    return std::make_pair(term[0], term[1]);
 }
 
 void SimplifyConstSum::Op(opensmt::Number& s, const opensmt::Number& v) const { s += v; }
