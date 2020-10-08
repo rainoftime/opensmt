@@ -1,7 +1,7 @@
 #include "UFTHandler.h"
 #include "TreeOps.h"
-#include "InterpolatingEgraph.h"
 #include "Egraph.h"
+#include "InterpolatingEgraph.h"
 
 UFTHandler::UFTHandler(SMTConfig & c, Logic & l)
     : TSolverHandler(c)
@@ -32,10 +32,10 @@ lbool UFTHandler::getPolaritySuggestion(PTRef p) const {
     return l_Undef;
 }
 
-PTRef UFTHandler::getInterpolant(const ipartitions_t& mask, map<PTRef, icolor_t> *labels)
+PTRef UFTHandler::getInterpolant(const ipartitions_t& mask, map<PTRef, icolor_t> *labels, PartitionManager &pmanager)
 {
     InterpolatingEgraph* iegraph = dynamic_cast<InterpolatingEgraph*>(egraph);
     assert(iegraph);
-    return iegraph->getInterpolant(mask, labels);
+    return iegraph->getInterpolant(mask, labels, pmanager);
 }
 
