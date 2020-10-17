@@ -1,5 +1,6 @@
 #include "LIASolver.h"
-#include "LASolver.h"
+
+#include "LIAInterpolator.h"
 
 
 
@@ -135,4 +136,20 @@ void LIASolver::markVarAsInt(LVRef v) {
 
     while(static_cast<unsigned>(cuts.size()) <= getVarId(v))
         cuts.push();
+}
+
+PTRef LIASolver::getInterpolant(const ipartitions_t & mask, std::map<PTRef, icolor_t> * labels, PartitionManager & pmanager) {
+    assert(status == UNSAT);
+    assert(labels);
+    LIAInterpolator interpolator(logic, explanation, explanationCoefficients, *labels);
+    auto algorithm = config.getLRAInterpolationAlgorithm();
+    if (algorithm == itp_lra_alg_strong) { return interpolator.getFarkasInterpolant(); }
+    else if (algorithm == itp_lra_alg_weak) { return interpolator.getDualFarkasInterpolant(); }
+    else if (algorithm == itp_lra_alg_factor) { return interpolator.getFlexibleInterpolant(opensmt::Real(config.getLRAStrengthFactor())); }
+    else if (algorithm == itp_lra_alg_decomposing_strong) { return interpolator.getDecomposedInterpolant(); }
+    else if (algorithm == itp_lra_alg_decomposing_weak) { return interpolator.getDualDecomposedInterpolant(); }
+    else { // SHOULD NOT HAPPEN!
+        assert(false);
+        return interpolator.getFarkasInterpolant();
+    }
 }

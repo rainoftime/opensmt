@@ -5,7 +5,7 @@
 #include "LASolver.h"
 #include "lasolver/LARefs.h"
 
-
+class PartitionManager;
 
 class LIASolverStats: public LASolverStats
 {
@@ -59,10 +59,11 @@ public:
     TRes check    ( bool complete) override; // Checks the satisfiability of current constraints //PS. add the implementation to LIASolver.C
     void getNewSplits(vec<PTRef>& splits) override;
 
+    PTRef getInterpolant( const ipartitions_t &, map<PTRef, icolor_t>*, PartitionManager & );
+
 protected:
 
     void notifyVar(LVRef v) override;
-    void initSolver( );                                     // Initializes the solver
 
     TRes checkIntegersAndSplit();
     bool isModelInteger (LVRef v) const;
